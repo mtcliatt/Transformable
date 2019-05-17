@@ -22,6 +22,25 @@ class Transformable extends StatefulWidget {
   final _startXScale = 1.0;
   final _startYScale = 1.0;
 
+  /// Creates a widget that scrolls and scales, horizontally and vertically.
+  Transformable({
+    this.viewerSize,
+    this.child,
+    this.size,
+    this.maxSize,
+    this.minSize,
+    this.maxXScale,
+    this.minXScale,
+    this.maxYScale,
+    this.minYScale,
+    this.startOffset = Offset.zero,
+    this.startSize,
+    this.startXScale,
+    this.startYScale,
+    this.innerBoundRect,
+    this.outerBoundRect,
+  });
+
   /// The widget to make transformable.
   final Widget child;
 
@@ -61,25 +80,6 @@ class Transformable extends StatefulWidget {
 
   /// The outer [Rect] that the child must remain within at all times.
   final Rect outerBoundRect;
-
-  /// Creates a widget that scrolls and scales, horizontally and vertically.
-  Transformable({
-    this.viewerSize,
-    this.child,
-    this.size,
-    this.maxSize,
-    this.minSize,
-    this.maxXScale,
-    this.minXScale,
-    this.maxYScale,
-    this.minYScale,
-    this.startOffset = Offset.zero,
-    this.startSize,
-    this.startXScale,
-    this.startYScale,
-    this.innerBoundRect,
-    this.outerBoundRect,
-  });
 
   @override
   State<StatefulWidget> createState() {
@@ -176,7 +176,7 @@ class _TransformableState extends State<Transformable>
 
   Offset get _minOffset {
     final bottomRightBound =
-        innerBoundRect != null ? innerBoundRect.bottomRight : Offset.infinite;
+        innerBoundRect != null ? innerBoundRect.bottomRight : -Offset.infinite;
 
     double xMin = bottomRightBound.dx - _size.width;
     double yMin = bottomRightBound.dy - _size.height;
@@ -203,10 +203,21 @@ class _TransformableState extends State<Transformable>
     super.dispose();
   }
 
-  Offset _clampOffset(Offset offset) => Offset(
-        offset.dx.clamp(_minOffset.dx, _maxOffset.dx),
-        offset.dy.clamp(_minOffset.dy, _maxOffset.dy),
-      );
+  Offset _clampOffset(Offset offset) {
+    final x = min(_maxOffset.dx, max(offset.dx, _minOffset.dx));
+    final y = min(_maxOffset.dy, max(offset.dy, _minOffset.dy));
+
+    print('clamped $offset to $x, $y');
+    print('x range: ${_minOffset.dx} - ${_maxOffset.dx}');
+    print('y range: ${_minOffset.dx} - ${_maxOffset.dy}');
+
+    return Offset(x, y);
+
+    // return Offset(
+    //     offset.dx.clamp(_minOffset.dx, _maxOffset.dx),
+    //     offset.dy.clamp(_minOffset.dy, _maxOffset.dy),
+    //   );
+  }
 
   void _handleFlingAnimation() {
     _transform.offset = _flingAnimation.value;
@@ -249,7 +260,7 @@ class _TransformableState extends State<Transformable>
       _transform.offset = _clampOffset(focalPointMinusScaledNorm);
     }
 
-    _transform.updateListeners();
+    _transform.notifyListeners();
     _prevFocalPoint = details.focalPoint;
   }
 
@@ -306,9 +317,7 @@ class TransformInfo {
 }
 
 /// Maintains some transform data, updating listeners when its value changes.
-class TransformNotifier extends ValueNotifier<Matrix4> {
-  final TransformInfo _transformInfo;
-
+class TransformNotifier extends ValueNotifier<TransformInfo> {
   TransformNotifier({Offset offset, double xScale, double yScale})
       : _transformInfo = TransformInfo(
           offset: offset,
@@ -316,8 +325,10 @@ class TransformNotifier extends ValueNotifier<Matrix4> {
           yScale: yScale,
         ),
         super(null) {
-    value = _transformInfo.transform;
+    value = _transformInfo;
   }
+
+  final TransformInfo _transformInfo;
 
   Offset get offset => _transformInfo.offset;
   double get xScale => _transformInfo.xScale;
@@ -327,7 +338,7 @@ class TransformNotifier extends ValueNotifier<Matrix4> {
   set yScale(double scale) => _transformInfo.yScale = scale;
   set offset(Offset offset) => _transformInfo.offset = offset;
 
-  void updateListeners() => value = _transformInfo.transform;
+  void notifyListeners() => super.notifyListeners();
 }
 
 /// A delegate that repaints its child when notified of a change in the child's
@@ -351,7 +362,7 @@ class TransformableFlowDelegate extends FlowDelegate {
 
   @override
   void paintChildren(FlowPaintingContext context) {
-    context.paintChild(0, transform: transformNotifier.value);
+    context.paintChild(0, transform: transformNotifier.value.transform);
   }
 
   /// No need to do logic here since we passed [transformNotifier] to [super],

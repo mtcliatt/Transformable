@@ -39,19 +39,19 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Stack(
         children: [
           Transformable(
-            child: Grid(
-            ),
+            child: Grid(),
             viewerSize: viewerSize,
             size: Size(100, 100),
             startSize: Size(200, 200),
             startOffset: Offset(100, 100),
-            innerBoundRect: innerRect,
+            minXScale: .1,
+            minYScale: .1,
             outerBoundRect: outerRect,
           ),
           BoundPaint(
-              innerRect: innerRect,
-              outerRect: outerRect,
-            ),
+            innerRect: innerRect,
+            outerRect: outerRect,
+          ),
         ],
       ),
     );
