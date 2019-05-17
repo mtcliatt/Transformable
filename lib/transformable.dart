@@ -162,7 +162,7 @@ class _TransformableState extends State<Transformable>
 
   Offset get _maxOffset {
     final bottomRightBound =
-        innerBoundRect != null ? innerBoundRect.bottomRight : Offset.infinite;
+        outerBoundRect != null ? outerBoundRect.bottomRight : Offset.infinite;
 
     double xMax = bottomRightBound.dx - _size.width;
     double yMax = bottomRightBound.dy - _size.height;
@@ -176,7 +176,7 @@ class _TransformableState extends State<Transformable>
 
   Offset get _minOffset {
     final bottomRightBound =
-        innerBoundRect != null ? innerBoundRect.bottomRight : -Offset.infinite;
+        innerBoundRect != null ? innerBoundRect.bottomRight : Offset.infinite;
 
     double xMin = bottomRightBound.dx - _size.width;
     double yMin = bottomRightBound.dy - _size.height;
