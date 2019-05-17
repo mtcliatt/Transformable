@@ -8,10 +8,10 @@ const _kMinFlingVelocity = 400.0;
 ///
 /// This widget behaves like a [StatefulWidget] but there are actually no
 /// [setState()] calls. Instead of calling [setState()] to trigger a repaint,
-/// this widget uses an [Animation] object which is passed to a [Flow] widget 
+/// this widget uses an [Animation] object which is passed to a [Flow] widget
 /// that listens to the object and repaints when it receives any updates.
-/// 
-/// This is the fastest way to trigger a repaint with [Flow] (see 
+///
+/// This is the fastest way to trigger a repaint with [Flow] (see
 /// https://docs.flutter.io/flutter/widgets/Flow-class.html), which is already
 /// "optimized for repositioning children using transformation matrices".
 class Transformable extends StatefulWidget {
@@ -161,8 +161,11 @@ class _TransformableState extends State<Transformable>
       );
 
   Offset get _maxOffset {
-    double xMax = outerBoundRect.bottomRight.dx - _size.width;
-    double yMax = outerBoundRect.bottomRight.dy - _size.height;
+    final bottomRightBound =
+        innerBoundRect != null ? innerBoundRect.bottomRight : Offset.infinite;
+
+    double xMax = bottomRightBound.dx - _size.width;
+    double yMax = bottomRightBound.dy - _size.height;
 
     if (innerBoundRect != null) {
       xMax = min(xMax, innerBoundRect.topLeft.dx);
@@ -172,8 +175,11 @@ class _TransformableState extends State<Transformable>
   }
 
   Offset get _minOffset {
-    double xMin = innerBoundRect.bottomRight.dx - _size.width;
-    double yMin = innerBoundRect.bottomRight.dy - _size.height;
+    final bottomRightBound =
+        innerBoundRect != null ? innerBoundRect.bottomRight : -Offset.infinite;
+
+    double xMin = bottomRightBound.dx - _size.width;
+    double yMin = bottomRightBound.dy - _size.height;
 
     if (outerBoundRect != null) {
       xMin = max(xMin, outerBoundRect.topLeft.dx);
