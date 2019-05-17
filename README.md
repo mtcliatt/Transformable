@@ -10,21 +10,6 @@ A 2D Scrollable and Scalable Flutter Widget.
 
 This example app is included in the package (`/lib/example/lib/main.dart`).
 
-### Usage
-
-Wrap your desired widget in the Transformable widget, and specify the size of the child and the size of the view. To use the maximum available view, wrap this in a LayoutBuilder and use constraints.biggest as the size.
-
-```
-Transformable(
-  child: Grid(),
-  size: Size(100, 100)
-);
-```
-
-Restrict the allowed area that the child can be moved to by specifying an inner and/or outer boundary rectangle.
-The inner rectangle is useful in situations like a photo viewer, where you want to make sure the child fills the a given area at all times.
-The outer rectangle is useful anytime you want to keep the child within a given area.
-
 The following example restricts the child's size to be at least half of the view size, and at most the entire view size. It also keeps the child positioned over the middle half of the view.
 
 ```
@@ -46,6 +31,22 @@ LayoutBuilder(
       ),
 );
 ```
+
+
+### Usage
+
+Wrap your desired widget in the Transformable widget, and specify the size of the child and the size of the view. To use the maximum available view, wrap this in a LayoutBuilder and use constraints.biggest as the size.
+
+```
+Transformable(
+  child: Grid(),
+  size: Size(100, 100)
+);
+```
+
+Restrict the allowed area that the child can be moved to by specifying an inner and/or outer boundary rectangle.
+The inner rectangle is useful in situations like a photo viewer, where you want to make sure the child fills the a given area at all times.
+The outer rectangle is useful anytime you want to keep the child within a given area.
 
 ### Details
 
