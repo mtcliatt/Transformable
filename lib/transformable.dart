@@ -132,7 +132,7 @@ class _TransformableState extends State<Transformable>
     Offset startOffset,
     double startXScale,
     double startYScale,
-  }) : _transform = TransformNotifier(
+  }) : transform = TransformNotifier(
           offset: startOffset,
           xScale: startXScale,
           yScale: startYScale,
@@ -144,7 +144,7 @@ class _TransformableState extends State<Transformable>
 
   final Rect innerBoundRect;
   final Rect outerBoundRect;
-  final TransformNotifier _transform;
+  final TransformNotifier transform;
 
   AnimationController _controller;
   Animation<Offset> _flingAnimation;
@@ -156,8 +156,8 @@ class _TransformableState extends State<Transformable>
 
   /// The child's current size (with scale).
   Size get _size => Size(
-        _transform.xScale * widget.size.width,
-        _transform.yScale * widget.size.height,
+        transform.xScale * widget.size.width,
+        transform.yScale * widget.size.height,
       );
 
   Offset get _maxOffset {
@@ -220,22 +220,22 @@ class _TransformableState extends State<Transformable>
   }
 
   void _handleFlingAnimation() {
-    _transform.offset = _flingAnimation.value;
+    transform.offset = _flingAnimation.value;
   }
 
   void _handleOnScaleStart(ScaleStartDetails details) {
     _controller.stop();
 
-    final focalOffset = details.focalPoint - _transform.offset;
+    final focalOffset = details.focalPoint - transform.offset;
 
     _touchStartNormOffset = Offset(
-      focalOffset.dx / _transform.xScale,
-      focalOffset.dy / _transform.yScale,
+      focalOffset.dx / transform.xScale,
+      focalOffset.dy / transform.yScale,
     );
 
     _prevFocalPoint = details.focalPoint;
-    _touchStartXScale = _transform.xScale;
-    _touchStartYScale = _transform.yScale;
+    _touchStartXScale = transform.xScale;
+    _touchStartYScale = transform.yScale;
   }
 
   /// Handles all gesture updates (since pan is a subset of scale
@@ -244,23 +244,23 @@ class _TransformableState extends State<Transformable>
     // A scale of 1.0 indicates no scale change, so the gesture is a transform.
     if (details.scale == 1.0) {
       final offsetWithDiff =
-          _transform.offset - (_prevFocalPoint - details.focalPoint);
-      _transform.offset = _clampOffset(offsetWithDiff);
+          transform.offset - (_prevFocalPoint - details.focalPoint);
+      transform.offset = _clampOffset(offsetWithDiff);
     } else {
-      _transform.xScale = (_touchStartXScale * details.horizontalScale)
+      transform.xScale = (_touchStartXScale * details.horizontalScale)
           .clamp(minXScale, maxXScale);
-      _transform.yScale = (_touchStartYScale * details.verticalScale)
+      transform.yScale = (_touchStartYScale * details.verticalScale)
           .clamp(minYScale, maxYScale);
 
       final scaledNormOffset = Offset(
-        _touchStartNormOffset.dx * _transform.xScale,
-        _touchStartNormOffset.dy * _transform.yScale,
+        _touchStartNormOffset.dx * transform.xScale,
+        _touchStartNormOffset.dy * transform.yScale,
       );
       final focalPointMinusScaledNorm = details.focalPoint - scaledNormOffset;
-      _transform.offset = _clampOffset(focalPointMinusScaledNorm);
+      transform.offset = _clampOffset(focalPointMinusScaledNorm);
     }
 
-    _transform.notifyListeners();
+    transform.notifyListeners();
     _prevFocalPoint = details.focalPoint;
   }
 
@@ -272,8 +272,8 @@ class _TransformableState extends State<Transformable>
     final double distance = (Offset.zero & widget.viewerSize).shortestSide;
 
     _flingAnimation = _controller.drive(Tween<Offset>(
-      begin: _transform.offset,
-      end: _clampOffset(_transform.offset + direction * distance),
+      begin: transform.offset,
+      end: _clampOffset(transform.offset + direction * distance),
     ));
     _controller
       ..value = 0.0
@@ -290,7 +290,7 @@ class _TransformableState extends State<Transformable>
         delegate: TransformableFlowDelegate(
           widget.viewerSize,
           widget.size,
-          _transform,
+          transform,
         ),
         children: [widget.child],
       ),
