@@ -1,3 +1,5 @@
+[![Pub](https://img.shields.io/pub/v/transformable.svg)](https://pub.dartlang.org/packages/transformable)
+
 # Transformable
 
 A 2D Scrollable and Scalable Flutter Widget.
