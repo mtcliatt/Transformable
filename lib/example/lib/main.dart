@@ -47,6 +47,7 @@ class _MyHomePageState extends State<MyHomePage> {
             minXScale: .1,
             minYScale: .1,
             outerBoundRect: outerRect,
+            innerBoundRect: innerRect,
           ),
           BoundPaint(
             innerRect: innerRect,
