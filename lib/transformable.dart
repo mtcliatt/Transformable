@@ -207,16 +207,7 @@ class _TransformableState extends State<Transformable>
     final x = min(_maxOffset.dx, max(offset.dx, _minOffset.dx));
     final y = min(_maxOffset.dy, max(offset.dy, _minOffset.dy));
 
-    print('clamped $offset to $x, $y');
-    print('x range: ${_minOffset.dx} - ${_maxOffset.dx}');
-    print('y range: ${_minOffset.dx} - ${_maxOffset.dy}');
-
     return Offset(x, y);
-
-    // return Offset(
-    //     offset.dx.clamp(_minOffset.dx, _maxOffset.dx),
-    //     offset.dy.clamp(_minOffset.dy, _maxOffset.dy),
-    //   );
   }
 
   void _handleFlingAnimation() {
