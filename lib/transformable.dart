@@ -243,12 +243,12 @@ class _TransformableState extends State<Transformable>
       transform.yScale = (_touchStartYScale * details.verticalScale)
           .clamp(minYScale, maxYScale);
 
-      final scaledNormOffset = Offset(
+      final scaledOffset = Offset(
         _touchStartNormOffset.dx * transform.xScale,
         _touchStartNormOffset.dy * transform.yScale,
       );
-      final focalPointMinusScaledNorm = details.focalPoint - scaledNormOffset;
-      transform.offset = _clampOffset(focalPointMinusScaledNorm);
+      final focalPointMinusOffset = details.focalPoint - scaledOffset;
+      transform.offset = _clampOffset(focalPointMinusOffset);
     }
 
     transform.notifyListeners();
