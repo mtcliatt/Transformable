@@ -1,8 +1,11 @@
 import 'dart:math' show min, max;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 const _kMinFlingVelocity = 400.0;
+
+typedef TransformListener = void Function(TransformInfo);
 
 /// A widget that scrolls and scales, both horizontally and vertically.
 ///
@@ -24,22 +27,25 @@ class Transformable extends StatefulWidget {
 
   /// Creates a widget that scrolls and scales, horizontally and vertically.
   Transformable({
-    this.viewerSize,
-    this.child,
-    this.size,
+    @required this.viewerSize,
+    @required this.child,
+    @required this.size,
+    this.startOffset = Offset.zero,
+    this.startSize,
+    this.startXScale,
+    this.startYScale,
     this.maxSize,
     this.minSize,
     this.maxXScale,
     this.minXScale,
     this.maxYScale,
     this.minYScale,
-    this.startOffset = Offset.zero,
-    this.startSize,
-    this.startXScale,
-    this.startYScale,
     this.innerBoundRect,
     this.outerBoundRect,
-  });
+  }) : transformNotifier = TransformNotifier();
+
+  /// The constant size of the viewer.
+  final Size viewerSize;
 
   /// The widget to make transformable.
   final Widget child;
@@ -47,27 +53,13 @@ class Transformable extends StatefulWidget {
   /// The "normal" or default size of the child.
   final Size size;
 
-  /// The constant size of the viewer.
-  final Size viewerSize;
-
-  /// The smallest allowable size of the child.
-  final Size minSize;
-
-  /// The largest allowable size of the child.
-  final Size maxSize;
-
-  final double minXScale;
-  final double minYScale;
-  final double maxXScale;
-  final double maxYScale;
-
-  /// The initial position of the child, offset from the top left of the view.
-  final Offset startOffset;
-
   /// The initial size of the child.
   ///
   /// Cannot be used with startXScale or startYScale.
   final Size startSize;
+
+  /// The initial position of the child, offset from the top left of the view.
+  final Offset startOffset;
 
   /// The initial horizontal scale to apply to the child.
   final double startXScale;
@@ -75,11 +67,25 @@ class Transformable extends StatefulWidget {
   /// The initial vertical scale to apply to the child.
   final double startYScale;
 
+  /// The largest allowable size of the child.
+  final Size maxSize;
+
+  /// The smallest allowable size of the child.
+  final Size minSize;
+
+  final double maxXScale;
+  final double minXScale;
+  final double maxYScale;
+  final double minYScale;
+
   /// The inner [Rect] that the child must cover at all times.
   final Rect innerBoundRect;
 
   /// The outer [Rect] that the child must remain within at all times.
   final Rect outerBoundRect;
+
+  /// A [ValueNotifier] for listening to the child's transform.
+  final TransformNotifier transformNotifier;
 
   @override
   State<StatefulWidget> createState() {
@@ -89,11 +95,12 @@ class Transformable extends StatefulWidget {
     double maxYScale = this.maxYScale ?? _maxYScale;
 
     final minSize = this.minSize ?? innerBoundRect?.size;
-    final maxSize = this.maxSize ?? outerBoundRect?.size;
     if (minSize != null) {
       minXScale = minSize.width / size.width;
       minYScale = minSize.height / size.height;
     }
+
+    final maxSize = this.maxSize ?? outerBoundRect?.size;
     if (maxSize != null) {
       maxXScale = maxSize.width / size.width;
       maxYScale = maxSize.height / size.height;
@@ -106,16 +113,21 @@ class Transformable extends StatefulWidget {
       startYScale = startSize.height / size.height;
     }
 
-    return _TransformableState(
-      innerBoundRect: innerBoundRect,
-      outerBoundRect: outerBoundRect,
+    transformNotifier.transform.offset = startOffset;
+    transformNotifier.transform.xScale = startXScale;
+    transformNotifier.transform.yScale = startYScale;
+
+    final constraints = TransformConstraints(
       minXScale: minXScale,
       maxXScale: maxXScale,
       minYScale: minYScale,
       maxYScale: maxYScale,
-      startOffset: startOffset,
-      startXScale: startXScale,
-      startYScale: startYScale,
+      innerBoundRect: innerBoundRect,
+      outerBoundRect: outerBoundRect,
+    );
+
+    return _TransformableState(
+      constraints: constraints,
     );
   }
 }
@@ -123,28 +135,12 @@ class Transformable extends StatefulWidget {
 class _TransformableState extends State<Transformable>
     with TickerProviderStateMixin {
   _TransformableState({
-    this.innerBoundRect,
-    this.outerBoundRect,
-    this.minXScale,
-    this.minYScale,
-    this.maxXScale,
-    this.maxYScale,
-    Offset startOffset,
-    double startXScale,
-    double startYScale,
-  }) : transform = TransformNotifier(
-          offset: startOffset,
-          xScale: startXScale,
-          yScale: startYScale,
-        );
-  final double minXScale;
-  final double maxXScale;
-  final double minYScale;
-  final double maxYScale;
+    this.constraints,
+  });
 
-  final Rect innerBoundRect;
-  final Rect outerBoundRect;
-  final TransformNotifier transform;
+  final TransformConstraints constraints;
+
+  TransformInfo transform;
 
   AnimationController _controller;
   Animation<Offset> _flingAnimation;
@@ -161,29 +157,31 @@ class _TransformableState extends State<Transformable>
       );
 
   Offset get _maxOffset {
-    final bottomRightBound =
-        outerBoundRect != null ? outerBoundRect.bottomRight : Offset.infinite;
+    final bottomRightBound = constraints.outerBoundRect != null
+        ? constraints.outerBoundRect.bottomRight
+        : Offset.infinite;
 
     double xMax = bottomRightBound.dx - _size.width;
     double yMax = bottomRightBound.dy - _size.height;
 
-    if (innerBoundRect != null) {
-      xMax = min(xMax, innerBoundRect.topLeft.dx);
-      yMax = min(yMax, innerBoundRect.topLeft.dy);
+    if (constraints.innerBoundRect != null) {
+      xMax = min(xMax, constraints.innerBoundRect.topLeft.dx);
+      yMax = min(yMax, constraints.innerBoundRect.topLeft.dy);
     }
     return Offset(xMax, yMax);
   }
 
   Offset get _minOffset {
-    final bottomRightBound =
-        innerBoundRect != null ? innerBoundRect.bottomRight : -Offset.infinite;
+    final bottomRightBound = constraints.innerBoundRect != null
+        ? constraints.innerBoundRect.bottomRight
+        : -Offset.infinite;
 
     double xMin = bottomRightBound.dx - _size.width;
     double yMin = bottomRightBound.dy - _size.height;
 
-    if (outerBoundRect != null) {
-      xMin = max(xMin, outerBoundRect.topLeft.dx);
-      yMin = max(yMin, outerBoundRect.topLeft.dy);
+    if (constraints.outerBoundRect != null) {
+      xMin = max(xMin, constraints.outerBoundRect.topLeft.dx);
+      yMin = max(yMin, constraints.outerBoundRect.topLeft.dy);
     }
 
     return Offset(xMin, yMin);
@@ -191,6 +189,8 @@ class _TransformableState extends State<Transformable>
 
   @override
   void initState() {
+    transform = widget.transformNotifier.transform;
+
     _controller = AnimationController(vsync: this)
       ..addListener(_handleFlingAnimation);
 
@@ -239,9 +239,9 @@ class _TransformableState extends State<Transformable>
       transform.offset = _clampOffset(offsetWithDiff);
     } else {
       transform.xScale = (_touchStartXScale * details.horizontalScale)
-          .clamp(minXScale, maxXScale);
+          .clamp(constraints.minXScale, constraints.maxXScale);
       transform.yScale = (_touchStartYScale * details.verticalScale)
-          .clamp(minYScale, maxYScale);
+          .clamp(constraints.minYScale, constraints.maxYScale);
 
       final scaledOffset = Offset(
         _touchStartNormOffset.dx * transform.xScale,
@@ -251,7 +251,7 @@ class _TransformableState extends State<Transformable>
       transform.offset = _clampOffset(focalPointMinusOffset);
     }
 
-    transform.notifyListeners();
+    widget.transformNotifier.notifyListeners();
     _prevFocalPoint = details.focalPoint;
   }
 
@@ -273,6 +273,11 @@ class _TransformableState extends State<Transformable>
 
   @override
   Widget build(BuildContext context) {
+    // Wait until after the build to broadcast the transform information (
+    // otherwise, an Exception would be thrown).
+    SchedulerBinding.instance.addPostFrameCallback(
+        (_) => widget.transformNotifier.notifyListeners());
+
     return GestureDetector(
       onScaleStart: _handleOnScaleStart,
       onScaleUpdate: _handleOnScaleUpdate,
@@ -281,7 +286,7 @@ class _TransformableState extends State<Transformable>
         delegate: TransformableFlowDelegate(
           widget.viewerSize,
           widget.size,
-          transform,
+          widget.transformNotifier,
         ),
         children: [widget.child],
       ),
@@ -289,11 +294,37 @@ class _TransformableState extends State<Transformable>
   }
 }
 
+
+/// Constraints to consider when using a transformation.
+@immutable
+class TransformConstraints {
+  final double minXScale;
+  final double maxXScale;
+  final double minYScale;
+  final double maxYScale;
+
+  /// The area that the child must completely cover at all times.
+  final Rect innerBoundRect;
+
+  /// The area that the child must remain within at all times.
+  final Rect outerBoundRect;
+
+  TransformConstraints({
+    this.innerBoundRect,
+    this.outerBoundRect,
+    this.minXScale,
+    this.maxXScale,
+    this.minYScale,
+    this.maxYScale,
+  });
+}
+
 /// Value class to hold an [Offset] and horizontal and vertical scales which
 /// make up some transformation.
 class TransformInfo {
-  Offset offset;
+  TransformInfo({this.offset, this.xScale, this.yScale});
 
+  Offset offset;
   double xScale;
   double yScale;
 
@@ -301,35 +332,32 @@ class TransformInfo {
     ..translate(offset.dx, offset.dy)
     ..scale(xScale, yScale);
 
-  TransformInfo({Offset offset, double xScale, double yScale})
-      : this.offset = offset ?? const Offset(0.0, 0.0),
-        this.xScale = xScale ?? 1.0,
-        this.yScale = yScale ?? 1.0;
+  @override
+  String toString() =>
+      'TransformInfo: $offset, x scale: $xScale, y scale: $yScale';
 }
 
-/// Maintains some transform data, updating listeners when its value changes.
+/// Maintains offset and scale, and updates listeners when those values change.
 class TransformNotifier extends ValueNotifier<TransformInfo> {
   TransformNotifier({Offset offset, double xScale, double yScale})
-      : _transformInfo = TransformInfo(
+      : transform = TransformInfo(
           offset: offset,
           xScale: xScale,
           yScale: yScale,
         ),
         super(null) {
-    value = _transformInfo;
+    value = transform;
   }
 
-  final TransformInfo _transformInfo;
+  final TransformInfo transform;
 
-  Offset get offset => _transformInfo.offset;
-  double get xScale => _transformInfo.xScale;
-  double get yScale => _transformInfo.yScale;
-
-  set xScale(double scale) => _transformInfo.xScale = scale;
-  set yScale(double scale) => _transformInfo.yScale = scale;
-  set offset(Offset offset) => _transformInfo.offset = offset;
-
+  @override
   void notifyListeners() => super.notifyListeners();
+
+  @override
+  String toString() =>
+      'TransformNotifier, current transform: ${transform.offset}, '
+      'x scale: ${transform.xScale}, y scale: ${transform.yScale}';
 }
 
 /// A delegate that repaints its child when notified of a change in the child's
