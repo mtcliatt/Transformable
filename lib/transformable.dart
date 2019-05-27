@@ -2,8 +2,6 @@ import 'dart:math' show min, max;
 
 import 'package:flutter/material.dart';
 
-import 'package:vector_math/vector_math_64.dart';
-
 // TODOs
 // todo: move example folder to proper location (up to be beside lib not in it).
 
@@ -85,8 +83,8 @@ class _TransformableState extends State<Transformable>
 /// Constraints to consider when using a transformation.
 class TransformConfig {
   factory TransformConfig({
-    Size initialSize,
     Transformation initialTransform,
+    Size initialSize,
     Size maxSize,
     Size minSize,
     Rect innerBoundRect = const Rect.fromLTRB(
@@ -96,31 +94,28 @@ class TransformConfig {
       -double.infinity,
     ),
     Rect outerBoundRect = Rect.largest,
-    Vector2 maxScale,
-    Vector2 minScale,
-    double minXScale,
-    double minYScale,
+    double maxScaleX,
+    double minScaleX,
+    double maxScaleY,
+    double minScaleY,
   }) {
     maxSize ??= outerBoundRect.size;
     minSize ??= innerBoundRect.size;
 
-    maxScale = Vector2(
-      maxSize.width / initialSize.width,
-      maxSize.height / initialSize.height,
-    );
-
-    minScale = Vector2(
-      minSize.width / initialSize.width,
-      minSize.height / initialSize.height,
-    );
+    maxScaleX = maxSize.width / initialSize.width;
+    minScaleX = minSize.width / initialSize.width;
+    maxScaleY = maxSize.height / initialSize.height;
+    minScaleY = minSize.height / initialSize.height;
 
     return TransformConfig._(
       initialSize: initialSize,
       initialTransform: initialTransform,
       innerBoundRect: innerBoundRect,
       outerBoundRect: outerBoundRect,
-      maxScale: maxScale,
-      minScale: minScale,
+      maxScaleX: maxScaleX,
+      minScaleX: minScaleX,
+      maxScaleY: maxScaleY,
+      minScaleY: minScaleY,
       maxSize: maxSize,
       minSize: minSize,
     );
@@ -131,8 +126,10 @@ class TransformConfig {
     this.initialTransform,
     this.innerBoundRect,
     this.outerBoundRect,
-    this.maxScale,
-    this.minScale,
+    this.maxScaleX,
+    this.minScaleX,
+    this.maxScaleY,
+    this.minScaleY,
     this.maxSize,
     this.minSize,
   });
@@ -143,8 +140,10 @@ class TransformConfig {
   final Size maxSize;
   final Size minSize;
 
-  final Vector2 maxScale;
-  final Vector2 minScale;
+  final double maxScaleX;
+  final double minScaleX;
+  final double maxScaleY;
+  final double minScaleY;
 
   /// The area that the child must completely cover at all times.
   final Rect innerBoundRect;
@@ -159,8 +158,12 @@ class TransformConfig {
         '\n\tinitialTransform: $initialTransform'
         '\n\tmaxSize: $maxSize'
         '\n\tminSize: $minSize'
-        '\n\tmaxScale: $maxScale'
-        '\n\tminScale: $minScale'
+        '\n\tmaxScaleX: $maxScaleX'
+        '\n\tminScaleX: $minScaleX'
+        '\n\tmaxScaleY: $maxScaleY'
+        '\n\tminScaleY: $minScaleY'
+        '\n\tminSize: $minSize'
+        '\n\tminSize: $minSize'
         '\n\tinnerBoundRect: $innerBoundRect'
         '\n\touterBoundRect: $outerBoundRect';
   }
@@ -170,27 +173,30 @@ class TransformConfig {
 class Transformation {
   Transformation({
     this.offset = Offset.zero,
-    Vector2 scale,
-  }) : this.scale = scale ?? Vector2(1.0, 1.0);
+    this.yScale = 1.0,
+    this.xScale = 1.0,
+  });
 
   Offset offset;
-  Vector2 scale;
+  double xScale;
+  double yScale;
 
   double get x => offset.dx;
   double get y => offset.dy;
 
   Matrix4 get transform => Matrix4.identity()
     ..translate(offset.dx, offset.dy)
-    ..scale(scale.x, scale.y);
+    ..scale(xScale, yScale);
 
   @override
   String toString() =>
-      'TransformInfo: $offset, x scale: ${scale.x}, y scale: ${scale.y}';
+      'TransformInfo: $offset, x scale: $xScale, y scale: $yScale';
 
   /// Returns a deep copy of [this].
   Transformation clone() => Transformation(
         offset: offset == null ? null : Offset(offset.dx, offset.dy),
-        scale: Vector2(scale.x, scale.y),
+        xScale: xScale,
+        yScale: yScale,
       );
 }
 
@@ -237,18 +243,14 @@ class TransformController extends ValueNotifier<Transformation> {
 
   Offset _prevFocalPoint;
   Offset _touchStartNormOffset;
-
-  // The initial x/y values in this field don't matter, since they'll be
-  // replaced when a gesture begins.
-  final Vector2 _touchStartScale = Vector2.zero();
+  double _touchStartScaleX;
+  double _touchStartScaleY;
 
   /// The child's current visible size (includes scale).
   Size get size => Size(
-        transform.scale.x * config.initialSize.width,
-        transform.scale.y * config.initialSize.height,
+        transform.xScale * config.initialSize.width,
+        transform.yScale * config.initialSize.height,
       );
-
-  Vector2 get scale => transform.scale;
 
   /// Returns the maximum allowed offset of a child with the given [size],
   /// considering the constraint information of [this].
@@ -301,13 +303,13 @@ class TransformController extends ValueNotifier<Transformation> {
     final focalOffset = details.focalPoint - transform.offset;
 
     _touchStartNormOffset = Offset(
-      focalOffset.dx / transform.scale.x,
-      focalOffset.dy / transform.scale.y,
+      focalOffset.dx / transform.xScale,
+      focalOffset.dy / transform.yScale,
     );
 
     _prevFocalPoint = details.focalPoint;
-    _touchStartScale.x = transform.scale.x;
-    _touchStartScale.y = transform.scale.y;
+    _touchStartScaleX = transform.xScale;
+    _touchStartScaleY = transform.yScale;
   }
 
   /// Handle an update to a pan or scale geture.
@@ -321,14 +323,14 @@ class TransformController extends ValueNotifier<Transformation> {
           transform.offset - (_prevFocalPoint - details.focalPoint);
       transform.offset = clampOffset(offsetWithDiff);
     } else {
-      transform.scale.x = (_touchStartScale.x * details.horizontalScale)
-          .clamp(config.minScale.x, config.maxScale.x);
-      transform.scale.y = (_touchStartScale.y * details.verticalScale)
-          .clamp(config.minScale.y, config.maxScale.y);
+      transform.xScale = (_touchStartScaleX * details.horizontalScale)
+          .clamp(config.minScaleX, config.maxScaleX);
+      transform.yScale = (_touchStartScaleY * details.verticalScale)
+          .clamp(config.minScaleY, config.maxScaleY);
 
       final scaledOffset = Offset(
-        _touchStartNormOffset.dx * transform.scale.x,
-        _touchStartNormOffset.dy * transform.scale.y,
+        _touchStartNormOffset.dx * transform.xScale,
+        _touchStartNormOffset.dy * transform.yScale,
       );
       final focalPointMinusOffset = details.focalPoint - scaledOffset;
       transform.offset = clampOffset(focalPointMinusOffset);
@@ -378,7 +380,7 @@ class TransformController extends ValueNotifier<Transformation> {
   @override
   String toString() => 'TransformController:'
       '\n\tcurrent transform: ${transform.offset}'
-      '\n\tx scale: ${transform.scale.x}, y scale: ${transform.scale.y}';
+      '\n\tx scale: ${transform.xScale}, y scale: ${transform.yScale}';
 }
 
 /// A delegate that repaints its child when notified of a change in the child's
