@@ -1,4 +1,4 @@
-#### 1.1.1+1
+#### 1.1.2
 
    - Bug fixes
       - Initial transformation now optional as expected.
