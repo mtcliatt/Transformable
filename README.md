@@ -12,28 +12,22 @@ A 2D Scrollable and Scalable Flutter Widget.
 <img width="400" height="800" src="example/screenshots/example.gif">
 </p>
 
-This example app is included in the package (`/lib/example/lib/main.dart`).
-
-The following example restricts the child's size to be at least half of the view size, and at most the entire view size. It also keeps the child positioned over the middle half of the view.
+This example app is included in the package (`/example/lib/main.dart`).
 
 ```
 LayoutBuilder(
   builder: (context, constraints) => Transformable(
-        child: Grid(),
-        viewerSize: viewerSize,
-        size: Size(100, 100),
-        startSize: Size(200, 200),
-        startOffset: Offset(100, 100),
-        innerBoundRect: Rect.fromLTWH(
-          constraints.biggest.width / 4,
-          constraints.biggest.height / 4,
-          constraints.biggest.width / 2,
-          constraints.biggest.height / 2,
-        ),
-        outerBoundRect: Rect.fromPoints(
-            Offset.zero, constraints.biggest.bottomRight(Offset.zero)),
+    child: Grid(),
+    viewerSize: viewerSize,
+    controller: TransformController(
+      config: TransformConfig(
+        initialTransform: Transformation(offset: startOffset),
+        initialSize: childStartSize,
+        innerBoundRect: innerRect,
+        outerBoundRect: outerRect,
       ),
-);
+    ),
+  );
 ```
 
 
