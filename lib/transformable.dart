@@ -104,10 +104,10 @@ class TransformConfig {
     maxSize ??= outerBoundRect.size;
     minSize ??= innerBoundRect.size;
 
-    maxScaleX = maxSize.width / initialSize.width;
-    minScaleX = minSize.width / initialSize.width;
-    maxScaleY = maxSize.height / initialSize.height;
-    minScaleY = minSize.height / initialSize.height;
+    maxScaleX ??= maxSize.width / initialSize.width;
+    minScaleX ??= minSize.width / initialSize.width;
+    maxScaleY ??= maxSize.height / initialSize.height;
+    minScaleY ??= minSize.height / initialSize.height;
 
     return TransformConfig._(
       initialSize: initialSize,

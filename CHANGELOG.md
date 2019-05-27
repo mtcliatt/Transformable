@@ -1,3 +1,8 @@
+#### 1.1.3
+
+   - Bug fixes
+      - Min/max scale values were being ignored in some cases.
+
 #### 1.1.2
 
    - Bug fixes
