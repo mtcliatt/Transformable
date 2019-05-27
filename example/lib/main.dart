@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:transformable/transformable.dart';
+
 import 'src/boundpainter.dart';
 import 'src/grid.dart';
-import '../../transformable.dart';
 
 void main() => runApp(MyApp());
 
