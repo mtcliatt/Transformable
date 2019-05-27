@@ -99,6 +99,8 @@ class TransformConfig {
     double maxScaleY,
     double minScaleY,
   }) {
+    initialTransform ??= Transformation();
+
     maxSize ??= outerBoundRect.size;
     minSize ??= innerBoundRect.size;
 

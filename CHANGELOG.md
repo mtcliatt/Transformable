@@ -1,6 +1,11 @@
+#### 1.1.1+1
+
+   - Bug fixes
+      - Initial transformation now optional as expected.
+
 ### 1.1.1
 
-   - Removes dev code.
+   - Bug fixes (removes old dev code).
 
 ## 1.1.0
 
