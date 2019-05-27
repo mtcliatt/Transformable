@@ -9,7 +9,7 @@ A 2D Scrollable and Scalable Flutter Widget.
 ## Example
 
 <p align="center">
-<img width="400" height="800" src="lib/example/screenshots/example.gif">
+<img width="400" height="800" src="example/screenshots/example.gif">
 </p>
 
 This example app is included in the package (`/lib/example/lib/main.dart`).
