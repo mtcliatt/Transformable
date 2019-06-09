@@ -1,5 +1,6 @@
 import 'dart:math' show min, max;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 // TODOs
@@ -74,7 +75,8 @@ class _TransformableState extends State<Transformable>
         ),
         children: [widget.child],
       ),
-      onDoubleTap: () => controller.zoomIn(xPercent: 25, yPercent: 25),
+      onDoubleTap: controller.handleDoubleTap,
+      onTapUp: controller.handleTapUp,
       onScaleStart: controller.handleScaleStart,
       onScaleUpdate: controller.handleScaleUpdate,
       onScaleEnd: controller.handleScaleEnd,
@@ -211,19 +213,65 @@ class TransformController extends ValueNotifier<Transformation> {
   // This factory constructor acts like a normal constructor to its users,
   // its only purpose is to create a singly copy of the initial transformation
   // that can be given to both the super constructor and the final field.
-  factory TransformController({TransformConfig config}) {
+  factory TransformController({
+    TransformConfig config,
+    GestureDragEndCallback dragEndCallback,
+    GestureDragStartCallback dragStartCallback,
+    GestureDragUpdateCallback dragUpdateCallback,
+    GestureScaleEndCallback scaleEndCallback,
+    GestureScaleStartCallback scaleStartCallback,
+    GestureScaleUpdateCallback scaleUpdateCallback,
+    GestureDoubleTapCallback doubleTapCallback,
+    GestureTapUpCallback tapUpCallback,
+  }) {
     final Transformation transformation = config.initialTransform?.clone();
-    return TransformController._(config: config, transform: transformation);
+    return TransformController._(
+      config: config,
+      transform: transformation,
+      dragEndCallback: dragEndCallback,
+      dragStartCallback: dragStartCallback,
+      dragUpdateCallback: dragUpdateCallback,
+      scaleEndCallback: scaleEndCallback,
+      scaleStartCallback: scaleStartCallback,
+      scaleUpdateCallback: scaleUpdateCallback,
+      doubleTapCallback: doubleTapCallback,
+      tapUpCallback: tapUpCallback,
+    );
   }
 
   TransformController._({
     this.config,
     this.transform,
     this.viewportSize,
-  }) : super(transform);
+    GestureScaleEndCallback scaleEndCallback,
+    GestureScaleStartCallback scaleStartCallback,
+    GestureScaleUpdateCallback scaleUpdateCallback,
+    GestureDragEndCallback dragEndCallback,
+    GestureDragStartCallback dragStartCallback,
+    GestureDragUpdateCallback dragUpdateCallback,
+    GestureDoubleTapCallback doubleTapCallback,
+    GestureTapUpCallback tapUpCallback,
+  })  : _dragEndCallback = dragEndCallback,
+        _dragStartCallback = dragStartCallback,
+        _dragUpdateCallback = dragUpdateCallback,
+        _scaleEndCallback = scaleEndCallback,
+        _scaleStartCallback = scaleStartCallback,
+        _scaleUpdateCallback = scaleUpdateCallback,
+        _doubleTapCallback = doubleTapCallback,
+        _tapUpCallback = tapUpCallback,
+        super(transform);
 
   final Transformation transform;
   final TransformConfig config;
+
+  final GestureDragEndCallback _dragEndCallback;
+  final GestureDragStartCallback _dragStartCallback;
+  final GestureDragUpdateCallback _dragUpdateCallback;
+  final GestureScaleEndCallback _scaleEndCallback;
+  final GestureScaleStartCallback _scaleStartCallback;
+  final GestureScaleUpdateCallback _scaleUpdateCallback;
+  final GestureDoubleTapCallback _doubleTapCallback;
+  final GestureTapUpCallback _tapUpCallback;
 
   Size viewportSize;
 
@@ -307,6 +355,11 @@ class TransformController extends ValueNotifier<Transformation> {
   }
 
   void handleScaleStart(ScaleStartDetails details) {
+    _scaleStartCallback?.call(details);
+    _dragStartCallback?.call(DragStartDetails(
+      globalPosition: details.focalPoint,
+      localPosition: details.localFocalPoint,
+    ));
     final focalOffset = details.localFocalPoint - transform.offset;
 
     _touchStartNormOffset = Offset(
@@ -324,8 +377,14 @@ class TransformController extends ValueNotifier<Transformation> {
   /// Handles all gesture updates (since pan is a subset of scale
   /// this handler catches both panning and scaling).
   void handleScaleUpdate(ScaleUpdateDetails details) {
+    _scaleUpdateCallback?.call(details);
     // A scale of 1.0 indicates no scale change, so the gesture is a pan.
     if (details.scale == 1.0) {
+      _dragUpdateCallback?.call(DragUpdateDetails(
+        globalPosition: details.focalPoint,
+        localPosition: details.localFocalPoint,
+      ));
+
       final offsetWithDiff =
           transform.offset - (_prevFocalPoint - details.localFocalPoint);
       transform.offset = clampOffset(offsetWithDiff);
@@ -343,6 +402,30 @@ class TransformController extends ValueNotifier<Transformation> {
 
     notifyListeners();
     _prevFocalPoint = details.localFocalPoint;
+  }
+
+  /// Check if a fling occured, and if so call [_handleFling].
+  void handleScaleEnd(ScaleEndDetails details) {
+    _scaleEndCallback?.call(details);
+    _dragEndCallback?.call(DragEndDetails());
+    // Check to see if the gesture ended with a fling.
+    final double magnitude = details.velocity.pixelsPerSecond.distance;
+    if (magnitude < _minFlingVelocity) return;
+
+    _handleFling(magnitude, details.velocity.pixelsPerSecond);
+  }
+
+  void handleTapUp(TapUpDetails details) {
+    _tapUpCallback?.call(details);
+  }
+
+  void handleDoubleTap() {
+    _doubleTapCallback?.call();
+  }
+
+  void _updateOffsetAfterFling() {
+    transform.offset = _flingAnimation.value;
+    notifyListeners();
   }
 
   /// Zooms in to the center of the viewport.
@@ -430,20 +513,6 @@ class TransformController extends ValueNotifier<Transformation> {
 
     transform.offset = clampOffset(scaledOffset);
 
-    notifyListeners();
-  }
-
-  /// Check if a fling occured, and if so call [_handleFling].
-  void handleScaleEnd(ScaleEndDetails details) {
-    // Check to see if the gesture ended with a fling.
-    final double magnitude = details.velocity.pixelsPerSecond.distance;
-    if (magnitude < _minFlingVelocity) return;
-
-    _handleFling(magnitude, details.velocity.pixelsPerSecond);
-  }
-
-  void _updateOffsetAfterFling() {
-    transform.offset = _flingAnimation.value;
     notifyListeners();
   }
 
