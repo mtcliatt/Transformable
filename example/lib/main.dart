@@ -96,18 +96,18 @@ class _MyHomePageState extends State<MyHomePage> {
                             controller.minOffset.dy,
                             controller.maxOffset.dy,
                           ),
-                          _buildSliderRow(
-                            'x scale: ${shorten(transform.scale.x)}',
-                            transform.scale.x,
-                            controller.config.minScale.x,
-                            controller.config.maxScale.x,
-                          ),
-                          _buildSliderRow(
-                            'y scale: ${shorten(transform.scale.y)}',
-                            transform.scale.y,
-                            controller.config.minScale.y,
-                            controller.config.maxScale.y,
-                          ),
+                          // _buildSliderRow(
+                          //   'x scale: ${shorten(transform.scale.x)}',
+                          //   transform.scale.x,
+                          //   controller.config.minScale.x,
+                          //   controller.config.maxScale.x,
+                          // ),
+                          // _buildSliderRow(
+                          //   'y scale: ${shorten(transform.scale.y)}',
+                          //   transform.scale.y,
+                          //   controller.config.minScale.y,
+                          //   controller.config.maxScale.y,
+                          // ),
                           _buildSliderRow(
                             'width: ${shorten(controller.size.width)}',
                             controller.size.width,

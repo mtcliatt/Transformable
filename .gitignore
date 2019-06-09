@@ -9,6 +9,9 @@
 .history
 .svn/
 
+# I just this for testing examples.
+.debug/
+
 # IntelliJ related
 *.iml
 *.ipr

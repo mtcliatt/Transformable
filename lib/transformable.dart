@@ -52,6 +52,7 @@ class _TransformableState extends State<Transformable>
   void initState() {
     controller = widget.controller;
     controller.animationController = AnimationController(vsync: this);
+    controller.viewportSize = widget.viewerSize;
 
     super.initState();
   }
@@ -73,6 +74,7 @@ class _TransformableState extends State<Transformable>
         ),
         children: [widget.child],
       ),
+      onDoubleTap: () => controller.zoomIn(xPercent: 25, yPercent: 25),
       onScaleStart: controller.handleScaleStart,
       onScaleUpdate: controller.handleScaleUpdate,
       onScaleEnd: controller.handleScaleEnd,
@@ -217,10 +219,13 @@ class TransformController extends ValueNotifier<Transformation> {
   TransformController._({
     this.config,
     this.transform,
+    this.viewportSize,
   }) : super(transform);
 
   final Transformation transform;
   final TransformConfig config;
+
+  Size viewportSize;
 
   /// The controller which drives the fling animation.
   ///
@@ -302,14 +307,14 @@ class TransformController extends ValueNotifier<Transformation> {
   }
 
   void handleScaleStart(ScaleStartDetails details) {
-    final focalOffset = details.focalPoint - transform.offset;
+    final focalOffset = details.localFocalPoint - transform.offset;
 
     _touchStartNormOffset = Offset(
       focalOffset.dx / transform.xScale,
       focalOffset.dy / transform.yScale,
     );
 
-    _prevFocalPoint = details.focalPoint;
+    _prevFocalPoint = details.localFocalPoint;
     _touchStartScaleX = transform.xScale;
     _touchStartScaleY = transform.yScale;
   }
@@ -322,24 +327,110 @@ class TransformController extends ValueNotifier<Transformation> {
     // A scale of 1.0 indicates no scale change, so the gesture is a pan.
     if (details.scale == 1.0) {
       final offsetWithDiff =
-          transform.offset - (_prevFocalPoint - details.focalPoint);
+          transform.offset - (_prevFocalPoint - details.localFocalPoint);
       transform.offset = clampOffset(offsetWithDiff);
     } else {
-      transform.xScale = (_touchStartScaleX * details.horizontalScale)
-          .clamp(config.minScaleX, config.maxScaleX);
-      transform.yScale = (_touchStartScaleY * details.verticalScale)
-          .clamp(config.minScaleY, config.maxScaleY);
+      final desiredScaleX = _touchStartScaleX * details.horizontalScale;
+      final desiredScaleY = _touchStartScaleY * details.verticalScale;
 
-      final scaledOffset = Offset(
-        _touchStartNormOffset.dx * transform.xScale,
-        _touchStartNormOffset.dy * transform.yScale,
+      _zoomTo(
+        normStartOffset: _touchStartNormOffset,
+        zoomTo: details.localFocalPoint,
+        newZoomX: desiredScaleX,
+        newZoomY: desiredScaleY,
       );
-      final focalPointMinusOffset = details.focalPoint - scaledOffset;
-      transform.offset = clampOffset(focalPointMinusOffset);
     }
 
     notifyListeners();
-    _prevFocalPoint = details.focalPoint;
+    _prevFocalPoint = details.localFocalPoint;
+  }
+
+  /// Zooms in to the center of the viewport.
+  ///
+  /// The zoom change can be specified in percentage (0-100) or absolute terms.
+  void zoomIn(
+      {double xPercent, double yPercent, double xAbsolute, double yAbsolute}) {
+    // todo: This could take a callback to start some simple animation to indicate
+    // the zoom couldn't complete (probably because the zoom was outside of the
+    // min/max).
+    assert(
+        (xPercent != null || xAbsolute != null) ||
+            (yPercent != null || yAbsolute != null),
+        'The amount to zoom in must be provided, but all arguments were null.');
+    assert(
+        !(xPercent != null && xAbsolute != null),
+        'The x-scale can only change by either a percentage or an absolute'
+        'amount, but xPercent and xAbsolute were both specified.');
+    assert(
+        !(yPercent != null && yAbsolute != null),
+        'The y-scale can only change by either a percentage or an absolute'
+        'amount, but yPercent and yAbsolute were both specified.');
+    zoomInToPoint(
+      xScale: xPercent == null
+          ? transform.xScale + xAbsolute
+          : transform.xScale * (xPercent / 100 + 1),
+      yScale: yPercent == null
+          ? transform.yScale + yAbsolute
+          : transform.yScale * (yPercent / 100 + 1),
+    );
+  }
+
+  /// Zooms in or out to the desired zoom level.
+  ///
+  /// Zooms from the center of the viewport.
+  void setZoom({double xZoom, double yZoom}) {
+    zoomIn(
+      xAbsolute: xZoom - transform.xScale,
+      yAbsolute: yZoom - transform.yScale,
+    );
+  }
+
+  /// Zooms in or out to the desired zoom level.
+  ///
+  /// Zooms from the center of the viewport.
+  void resetZoomAndOffset() {
+    transform.xScale = config.initialTransform.xScale;
+    transform.yScale = config.initialTransform.yScale;
+    transform.offset = config.initialTransform.offset;
+
+    notifyListeners();
+  }
+
+  /// Zooms to the given `zoomPoint`, or the center if one isn't specified.
+  void zoomInToPoint({double xScale, double yScale, Offset zoomPoint}) {
+    zoomPoint ??= Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final offsetZoomPoint = zoomPoint - transform.offset;
+    final normStartOffset = Offset(
+      offsetZoomPoint.dx / transform.xScale,
+      offsetZoomPoint.dy / transform.yScale,
+    );
+
+    _zoomTo(
+      normStartOffset: normStartOffset,
+      zoomTo: zoomPoint,
+      newZoomX: xScale,
+      newZoomY: yScale,
+    );
+  }
+
+  void _zoomTo({
+    Offset normStartOffset,
+    Offset zoomTo,
+    double newZoomX,
+    double newZoomY,
+  }) {
+    transform.xScale = (newZoomX).clamp(config.minScaleX, config.maxScaleX);
+    transform.yScale = (newZoomY).clamp(config.minScaleY, config.maxScaleY);
+
+    final scaledOffset = zoomTo -
+        Offset(
+          normStartOffset.dx * transform.xScale,
+          normStartOffset.dy * transform.yScale,
+        );
+
+    transform.offset = clampOffset(scaledOffset);
+
+    notifyListeners();
   }
 
   /// Check if a fling occured, and if so call [_handleFling].
@@ -358,9 +449,7 @@ class TransformController extends ValueNotifier<Transformation> {
 
   void _handleFling(double magnitude, Offset pixelsPerSecond) {
     final Offset direction = pixelsPerSecond / magnitude;
-
-    // todo: double check the value of this field.
-    final double distance = config.outerBoundRect.shortestSide;
+    final double distance = viewportSize.shortestSide;
     final Offset begin = transform.offset;
     final Offset end = clampOffset(begin + direction * distance);
 
