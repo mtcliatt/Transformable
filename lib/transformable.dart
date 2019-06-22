@@ -3,9 +3,6 @@ import 'dart:math' show min, max;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-// TODOs
-// todo: move example folder to proper location (up to be beside lib not in it).
-
 typedef TransformListener = void Function(Transformation);
 
 /// A widget that scrolls and scales, both horizontally and vertically.
@@ -36,7 +33,7 @@ class Transformable extends StatefulWidget {
   /// The constant size of the viewer.
   final Size viewerSize;
 
-  /// An optional controller/observer for this transformable wiget..
+  /// An optional controller/observer.
   final TransformController controller;
 
   @override
@@ -66,20 +63,36 @@ class _TransformableState extends State<Transformable>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      child: Flow(
-        delegate: TransformableFlowDelegate(
-          widget.viewerSize,
-          widget.controller.config.initialSize,
-          widget.controller,
+    return Listener(
+      onPointerSignal: (event) {
+        if (event is! PointerScrollEvent) return;
+
+        final PointerScrollEvent scrollEvent = event as PointerScrollEvent;
+        controller.handleScrollUpdate(
+          ScrollUpdateDetails(
+            delta: scrollEvent.scrollDelta,
+            sourceTimeStamp: event.timeStamp,
+          ),
+        );
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        child: Flow(
+          delegate: TransformableFlowDelegate(
+            widget.viewerSize,
+            widget.controller.config.initialSize,
+            widget.controller,
+          ),
+          children: [
+            widget.child,
+          ],
         ),
-        children: [widget.child],
+        onDoubleTap: controller.handleDoubleTap,
+        onTapUp: controller.handleTapUp,
+        onScaleStart: controller.handleScaleStart,
+        onScaleUpdate: controller.handleScaleUpdate,
+        onScaleEnd: controller.handleScaleEnd,
       ),
-      onDoubleTap: controller.handleDoubleTap,
-      onTapUp: controller.handleTapUp,
-      onScaleStart: controller.handleScaleStart,
-      onScaleUpdate: controller.handleScaleUpdate,
-      onScaleEnd: controller.handleScaleEnd,
     );
   }
 }
@@ -154,6 +167,8 @@ class TransformConfig {
   /// The area that the child must completely cover at all times.
   final Rect innerBoundRect;
 
+  // TODO create another bounding rect that the child must partially cover. ****
+
   /// The area that the child must remain within at all times.
   final Rect outerBoundRect;
 
@@ -214,7 +229,9 @@ class TransformController extends ValueNotifier<Transformation> {
   // its only purpose is to create a singly copy of the initial transformation
   // that can be given to both the super constructor and the final field.
   factory TransformController({
+    bool allowFling = false,
     TransformConfig config,
+    GestureScrollUpdateCallback scrollUpdateCallback,
     GestureDragEndCallback dragEndCallback,
     GestureDragStartCallback dragStartCallback,
     GestureDragUpdateCallback dragUpdateCallback,
@@ -226,6 +243,7 @@ class TransformController extends ValueNotifier<Transformation> {
   }) {
     final Transformation transformation = config.initialTransform?.clone();
     return TransformController._(
+      allowFling: allowFling,
       config: config,
       transform: transformation,
       dragEndCallback: dragEndCallback,
@@ -234,15 +252,18 @@ class TransformController extends ValueNotifier<Transformation> {
       scaleEndCallback: scaleEndCallback,
       scaleStartCallback: scaleStartCallback,
       scaleUpdateCallback: scaleUpdateCallback,
+      scrollUpdateCallback: scrollUpdateCallback,
       doubleTapCallback: doubleTapCallback,
       tapUpCallback: tapUpCallback,
     );
   }
 
   TransformController._({
+    this.allowFling,
     this.config,
     this.transform,
     this.viewportSize,
+    GestureScrollUpdateCallback scrollUpdateCallback,
     GestureScaleEndCallback scaleEndCallback,
     GestureScaleStartCallback scaleStartCallback,
     GestureScaleUpdateCallback scaleUpdateCallback,
@@ -251,7 +272,8 @@ class TransformController extends ValueNotifier<Transformation> {
     GestureDragUpdateCallback dragUpdateCallback,
     GestureDoubleTapCallback doubleTapCallback,
     GestureTapUpCallback tapUpCallback,
-  })  : _dragEndCallback = dragEndCallback,
+  })  : _scrollUpdateCallback = scrollUpdateCallback,
+        _dragEndCallback = dragEndCallback,
         _dragStartCallback = dragStartCallback,
         _dragUpdateCallback = dragUpdateCallback,
         _scaleEndCallback = scaleEndCallback,
@@ -264,6 +286,9 @@ class TransformController extends ValueNotifier<Transformation> {
   final Transformation transform;
   final TransformConfig config;
 
+  final bool allowFling;
+
+  final GestureScrollUpdateCallback _scrollUpdateCallback;
   final GestureDragEndCallback _dragEndCallback;
   final GestureDragStartCallback _dragStartCallback;
   final GestureDragUpdateCallback _dragUpdateCallback;
@@ -354,19 +379,22 @@ class TransformController extends ValueNotifier<Transformation> {
     );
   }
 
+  void handleScrollUpdate(ScrollUpdateDetails details) {
+    _scrollUpdateCallback?.call(details);
+  }
+
   void handleScaleStart(ScaleStartDetails details) {
     _scaleStartCallback?.call(details);
     _dragStartCallback?.call(DragStartDetails(
       globalPosition: details.focalPoint,
       localPosition: details.localFocalPoint,
     ));
-    final focalOffset = details.localFocalPoint - transform.offset;
 
+    final focalOffset = details.localFocalPoint - transform.offset;
     _touchStartNormOffset = Offset(
       focalOffset.dx / transform.xScale,
       focalOffset.dy / transform.yScale,
     );
-
     _prevFocalPoint = details.localFocalPoint;
     _touchStartScaleX = transform.xScale;
     _touchStartScaleY = transform.yScale;
@@ -377,17 +405,23 @@ class TransformController extends ValueNotifier<Transformation> {
   /// Handles all gesture updates (since pan is a subset of scale
   /// this handler catches both panning and scaling).
   void handleScaleUpdate(ScaleUpdateDetails details) {
-    _scaleUpdateCallback?.call(details);
-    // A scale of 1.0 indicates no scale change, so the gesture is a pan.
-    if (details.scale == 1.0) {
-      _dragUpdateCallback?.call(DragUpdateDetails(
-        globalPosition: details.focalPoint,
-        localPosition: details.localFocalPoint,
-      ));
+    if (_scaleUpdateCallback != null) {
+      return _scaleUpdateCallback(details);
+    }
 
-      final offsetWithDiff =
-          transform.offset - (_prevFocalPoint - details.localFocalPoint);
-      transform.offset = clampOffset(offsetWithDiff);
+    // A scale of 1.0 indicates no scale change in the gesture.
+    if (details.scale == 1.0) {
+      final delta = _prevFocalPoint - details.localFocalPoint;
+
+      if (_dragUpdateCallback != null) {
+        return _dragUpdateCallback(DragUpdateDetails(
+          delta: delta,
+          globalPosition: details.focalPoint,
+          localPosition: details.localFocalPoint,
+        ));
+      } else {
+        moveTo(transform.offset - delta);
+      }
     } else {
       final desiredScaleX = _touchStartScaleX * details.horizontalScale;
       final desiredScaleY = _touchStartScaleY * details.verticalScale;
@@ -400,14 +434,23 @@ class TransformController extends ValueNotifier<Transformation> {
       );
     }
 
+    // todo: move this out?
     notifyListeners();
     _prevFocalPoint = details.localFocalPoint;
+  }
+
+  void moveTo(Offset newPosition) {
+    transform.offset = clampOffset(newPosition);
+    notifyListeners();
   }
 
   /// Check if a fling occured, and if so call [_handleFling].
   void handleScaleEnd(ScaleEndDetails details) {
     _scaleEndCallback?.call(details);
     _dragEndCallback?.call(DragEndDetails());
+
+    if (!allowFling) return;
+
     // Check to see if the gesture ended with a fling.
     final double magnitude = details.velocity.pixelsPerSecond.distance;
     if (magnitude < _minFlingVelocity) return;
@@ -560,7 +603,7 @@ class TransformableFlowDelegate extends FlowDelegate {
 
   @override
   BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
-      BoxConstraints.tight(childSize);
+      BoxConstraints.tight(controller.size);
 
   @override
   void paintChildren(FlowPaintingContext context) {
@@ -571,4 +614,31 @@ class TransformableFlowDelegate extends FlowDelegate {
   /// so repainting is controlled by its updates.
   @override
   bool shouldRepaint(TransformableFlowDelegate oldDelegate) => false;
+}
+
+/// Signature for when scroll happens.
+///
+/// The `details` object provides the amount of scroll since the last update.
+typedef GestureScrollUpdateCallback = void Function(
+    ScrollUpdateDetails details);
+
+/// Details object for callbacks that use [GestureScrollUpdateCallback].
+class ScrollUpdateDetails {
+  /// Creates details for a [ScrollUpdateDetails].
+  ScrollUpdateDetails({
+    this.sourceTimeStamp,
+    this.delta = Offset.zero,
+    Offset localPosition,
+  });
+
+  /// Recorded timestamp of the source pointer event that triggered the scroll.
+  final Duration sourceTimeStamp;
+
+  /// The amount of scoll since the previous update.
+  ///
+  /// Defaults to zero if not specified in the constructor.
+  final Offset delta;
+
+  @override
+  String toString() => '$runtimeType($delta)';
 }
